@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>차량 2부제 단속 앱</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --blue: #003DA5;
+    --blue-dark: #002a70;
+    --blue-light: #1565c0;
+    --accent: #E8B800;
+    --red: #C62828;
+    --green: #2e7d32;
+    --bg: #f0f4ff;
+    --card: #ffffff;
+    --text: #1a1a2e;
+    --subtext: #555;
+    --border: #d0d8f0;
+    --radius: 14px;
+  }
+  body { font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; background: var(--bg); color: var(--text); max-width: 480px; margin: 0 auto; min-height: 100vh; overflow-x: hidden; }
+
+  /* ═══════════════════════════════════════ 스크린 공통 */
+  .screen { display: none; min-height: 100vh; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  /* ═══════════════════════════════════════ 로딩 화면 */
+  #screen-loading {
+    background: linear-gradient(160deg, #001f6b 0%, #003DA5 50%, #001a50 100%);
+    align-items: center; justify-content: flex-start;
+    padding: 40px 24px 0;
+    position: relative; overflow: hidden;
+  }
+  .loading-stars {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none;
+  }
+  .star { position: absolute; background: white; border-radius: 50%; animation: twinkle 2s infinite alternate; }
+  .loading-title {
+    text-align: center; color: white; font-size: 22px; font-weight: 900;
+    line-height: 1.4; letter-spacing: -0.5px; margin-bottom: 8px; z-index: 1;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+  }
+  .loading-subtitle {
+    text-align: center; color: var(--accent); font-size: 13px; font-weight: 600;
+    margin-bottom: 32px; z-index: 1;
+  }
+  .loading-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1; width: 100%; }
+  .stage-scene { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; width: 100%; animation: fadeInScene .5s ease; }
+  .stage-scene.visible { display: flex; }
+
+  /* 씬 1 - 호르무즈 유조선 */
+  .hormuz-scene { position: relative; width: 320px; height: 200px; overflow: hidden; }
+  .sea { position: absolute; bottom: 0; left: 0; right: 0; height: 80px; background: linear-gradient(180deg, #0d47a1, #1565c0); border-radius: 50% 50% 0 0 / 20px 20px 0 0; }
+  .wave { position: absolute; bottom: 55px; left: -20px; right: -20px; height: 30px; border-radius: 50%; background: rgba(100,181,246,0.4); animation: waveAnim 1.5s ease-in-out infinite alternate; }
+  .tanker { position: absolute; bottom: 70px; font-size: 56px; animation: tankerMove 2s ease-out forwards; left: -80px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); }
+  .strait-wall { position: absolute; bottom: 0; top: 0; width: 16px; background: repeating-linear-gradient(180deg, #b71c1c 0 12px, #e53935 12px 24px); border-radius: 4px; display: flex; flex-direction: column; align-items: center; }
+  .strait-wall.left { right: 100px; }
+  .strait-wall.right { right: 82px; }
+  .strait-gap { position: absolute; bottom: 0; right: 82px; width: 34px; height: 60px; background: rgba(13,71,161,0.6); }
+  .block-sign { position: absolute; top: 30px; right: 60px; font-size: 36px; animation: pulse 0.8s ease infinite alternate; z-index: 10; }
+  .scene-label { margin-top: 16px; color: white; font-size: 15px; font-weight: 700; text-shadow: 0 1px 6px rgba(0,0,0,0.5); line-height: 1.5; }
+
+  /* 씬 2 - 태극기 */
+  .flags-row { display: flex; align-items: center; gap: 12px; font-size: 54px; animation: flagShake 1s ease infinite alternate; }
+  .crying-flag { position: relative; display: inline-block; }
+  .crying-overlay { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); font-size: 22px; animation: cry 0.7s ease infinite alternate; }
+
+  /* 씬 3 - 유가상승 */
+  .oil-scene { display: flex; flex-direction: column; align-items: center; }
+  .drums-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 8px; }
+  .drum { font-size: 38px; animation: drumRise 0.6s ease forwards; opacity: 0; }
+  .drum:nth-child(1) { animation-delay: 0s; }
+  .drum:nth-child(2) { animation-delay: 0.15s; }
+  .drum:nth-child(3) { animation-delay: 0.3s; }
+  .drum:nth-child(4) { animation-delay: 0.45s; }
+  .drum:nth-child(5) { animation-delay: 0.6s; }
+  .price-chart { display: flex; align-items: flex-end; gap: 6px; height: 80px; padding: 0 8px; }
+  .bar { width: 28px; background: linear-gradient(180deg, #ef5350, #b71c1c); border-radius: 4px 4px 0 0; animation: barGrow .5s ease forwards; transform-origin: bottom; }
+  .bar:nth-child(1) { height: 30%; animation-delay: .1s; }
+  .bar:nth-child(2) { height: 45%; animation-delay: .2s; }
+  .bar:nth-child(3) { height: 60%; animation-delay: .3s; }
+  .bar:nth-child(4) { height: 78%; animation-delay: .4s; }
+  .bar:nth-child(5) { height: 100%; animation-delay: .5s; background: linear-gradient(180deg, #ff1744, #b71c1c); }
+  .price-arrow { font-size: 32px; animation: arrowBounce 0.5s ease infinite alternate; }
+  .price-label { font-size: 22px; font-weight: 900; color: #ff5252; animation: pricePulse 0.5s ease infinite alternate; }
+
+  /* 로딩 바 */
+  .loading-bar-wrap { width: 100%; padding: 0 24px 40px; z-index: 1; }
+  .loading-bar-bg { background: rgba(255,255,255,0.15); border-radius: 10px; height: 8px; overflow: hidden; }
+  .loading-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #fff); border-radius: 10px; width: 0%; transition: width 0.1s linear; }
+  .loading-percent { text-align: center; color: rgba(255,255,255,0.7); font-size: 12px; margin-top: 6px; }
+
+  /* ═══════════════════════════════════════ 공통 헤더 */
+  .header { background: linear-gradient(135deg, var(--blue-dark), var(--blue)); color: white; padding: 18px 20px 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 12px rgba(0,61,165,0.3); position: sticky; top: 0; z-index: 100; }
+  .header-back { font-size: 22px; cursor: pointer; padding: 4px; }
+  .header-title { font-size: 17px; font-weight: 700; flex: 1; letter-spacing: -0.3px; }
+  .header-icon { font-size: 22px; }
+
+  /* ═══════════════════════════════════════ 메인 화면 */
+  #screen-main { background: var(--bg); }
+  .main-banner {
+    background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue) 100%);
+    padding: 32px 24px 28px; color: white; text-align: center;
+  }
+  .main-banner-icon { font-size: 48px; margin-bottom: 10px; }
+  .main-banner-title { font-size: 20px; font-weight: 900; line-height: 1.4; margin-bottom: 6px; }
+  .main-banner-sub { font-size: 13px; color: rgba(255,255,255,0.75); }
+  .main-date-badge {
+    background: rgba(255,255,255,0.15); border-radius: 20px; padding: 6px 16px;
+    display: inline-block; font-size: 13px; margin-top: 12px; border: 1px solid rgba(255,255,255,0.3);
+  }
+  .main-rule {
+    background: rgba(232,184,0,0.15); border-left: 4px solid var(--accent);
+    margin: 16px 16px 0; padding: 12px 16px; border-radius: 0 8px 8px 0;
+  }
+  .main-rule-text { font-size: 13px; color: #1a3a7a; font-weight: 600; line-height: 1.6; }
+  .main-menu { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 20px 16px; }
+  .menu-card {
+    background: white; border-radius: var(--radius); padding: 20px;
+    display: flex; align-items: center; gap: 16px;
+    box-shadow: 0 2px 10px rgba(0,61,165,0.1);
+    cursor: pointer; transition: transform .15s, box-shadow .15s;
+    border: 1px solid var(--border);
+    text-decoration: none; color: inherit;
+  }
+  .menu-card:active { transform: scale(0.97); box-shadow: 0 1px 5px rgba(0,61,165,0.15); }
+  .menu-card-icon { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
+  .menu-card-icon.orange { background: linear-gradient(135deg, #ff6f00, #ff8f00); }
+  .menu-card-icon.blue { background: linear-gradient(135deg, var(--blue), #1976d2); }
+  .menu-card-icon.green { background: linear-gradient(135deg, #2e7d32, #43a047); }
+  .menu-card-body { flex: 1; }
+  .menu-card-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .menu-card-desc { font-size: 12px; color: var(--subtext); line-height: 1.5; }
+  .menu-card-arrow { font-size: 18px; color: #aaa; }
+
+  /* ═══════════════════════════════════════ 입력 화면 */
+  .content { flex: 1; overflow-y: auto; padding: 16px; }
+  .section-card { background: white; border-radius: var(--radius); padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 8px rgba(0,0,0,0.07); border: 1px solid var(--border); }
+  .section-title { font-size: 14px; font-weight: 700; color: var(--blue); margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+  .section-title::before { content: ''; width: 4px; height: 16px; background: var(--blue); border-radius: 2px; display: inline-block; }
+
+  /* 달력 */
+  .cal-wrap { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-header { text-align: center; font-size: 11px; font-weight: 700; color: var(--subtext); padding: 4px 0; }
+  .cal-header.sun { color: var(--red); }
+  .cal-header.sat { color: var(--blue); }
+  .cal-day {
+    text-align: center; font-size: 13px; padding: 8px 2px;
+    border-radius: 8px; cursor: pointer; transition: background .15s;
+    border: 1px solid transparent;
+  }
+  .cal-day:hover { background: var(--bg); }
+  .cal-day.selected { background: var(--blue); color: white; font-weight: 700; }
+  .cal-day.today { border-color: var(--accent); color: var(--blue); font-weight: 700; }
+  .cal-day.odd-day { background: rgba(0,61,165,0.06); }
+  .cal-day.even-day { background: rgba(200,40,40,0.05); }
+  .cal-day.empty { visibility: hidden; }
+  .cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .cal-nav button { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 16px; }
+  .cal-nav span { font-size: 15px; font-weight: 700; }
+  .rule-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-top: 10px; }
+  .rule-badge.odd { background: rgba(0,61,165,0.1); color: var(--blue); }
+  .rule-badge.even { background: rgba(198,40,40,0.1); color: var(--red); }
+
+  /* 층별 입력 */
+  .floor-section { margin-bottom: 12px; }
+  .floor-header { background: var(--blue); color: white; padding: 8px 14px; border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .floor-header.underground { background: #37474f; }
+  .floor-body { border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; padding: 12px; }
+  .plate-input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .plate-input-row:last-child { margin-bottom: 0; }
+  .plate-num { width: 28px; height: 28px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--subtext); flex-shrink: 0; }
+  .plate-input {
+    flex: 1; border: 2px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font-size: 17px; font-weight: 700; text-align: center;
+    letter-spacing: 4px; transition: border-color .2s;
+    font-family: 'Courier New', monospace;
+  }
+  .plate-input:focus { outline: none; border-color: var(--blue); }
+  .plate-input.valid { border-color: var(--green); background: #e8f5e9; }
+  .plate-input.invalid { border-color: var(--red); background: #ffebee; }
+  .plate-delete { width: 32px; height: 32px; border: none; background: #ffebee; color: var(--red); border-radius: 6px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+  .add-row-btn { width: 100%; padding: 8px; border: 2px dashed var(--border); background: none; border-radius: 8px; color: var(--subtext); font-size: 13px; cursor: pointer; margin-top: 8px; transition: border-color .2s, color .2s; }
+  .add-row-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .validation-msg { font-size: 11px; padding: 2px 8px; border-radius: 4px; display: none; }
+  .validation-msg.show { display: inline-block; }
+  .validation-msg.ok { background: #e8f5e9; color: var(--green); }
+  .validation-msg.err { background: #ffebee; color: var(--red); }
+
+  /* 저장 버튼 */
+  .save-btn {
+    width: 100%; padding: 16px; font-size: 17px; font-weight: 700;
+    background: linear-gradient(135deg, var(--blue), #1976d2);
+    color: white; border: none; border-radius: var(--radius);
+    cursor: pointer; margin-top: 4px; letter-spacing: 0.5px;
+    box-shadow: 0 4px 15px rgba(0,61,165,0.35);
+    transition: opacity .2s, transform .15s;
+  }
+  .save-btn:active { transform: scale(0.97); }
+  .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ═══════════════════════════════════════ 통계 화면 */
+  .tab-bar { display: flex; background: white; border-bottom: 2px solid var(--border); position: sticky; top: 65px; z-index: 50; }
+  .tab-btn { flex: 1; padding: 12px; font-size: 13px; font-weight: 600; border: none; background: none; cursor: pointer; color: var(--subtext); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: color .2s, border-color .2s; }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .tab-content { display: none; padding: 16px; }
+  .tab-content.active { display: block; }
+  .stat-date-group { margin-bottom: 16px; }
+  .stat-date-label { font-size: 13px; font-weight: 700; color: var(--blue); background: rgba(0,61,165,0.08); padding: 6px 12px; border-radius: 6px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .stat-row { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+  .stat-plate { font-size: 15px; font-weight: 700; font-family: 'Courier New', monospace; background: var(--blue); color: white; padding: 3px 10px; border-radius: 6px; letter-spacing: 2px; }
+  .stat-floor { font-size: 11px; color: white; background: #37474f; padding: 2px 8px; border-radius: 4px; }
+  .stat-info { flex: 1; }
+  .stat-owner { font-size: 12px; color: var(--subtext); }
+  .stat-note { font-size: 11px; color: #888; }
+  .rank-badge { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: white; flex-shrink: 0; }
+  .rank-1 { background: #f9a825; }
+  .rank-2 { background: #9e9e9e; }
+  .rank-3 { background: #795548; }
+  .rank-n { background: var(--blue); }
+  .count-badge { font-size: 13px; font-weight: 700; color: var(--red); background: #ffebee; padding: 3px 10px; border-radius: 12px; }
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--subtext); }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+  /* ═══════════════════════════════════════ 차량 DB */
+  .db-form { background: white; border-radius: var(--radius); padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 8px rgba(0,0,0,0.07); border: 1px solid var(--border); }
+  .form-row { margin-bottom: 12px; }
+  .form-label { font-size: 12px; font-weight: 700; color: var(--subtext); margin-bottom: 6px; display: block; }
+  .form-input { width: 100%; border: 2px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; transition: border-color .2s; }
+  .form-input:focus { outline: none; border-color: var(--blue); }
+  .form-row-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .add-vehicle-btn { width: 100%; padding: 13px; font-size: 15px; font-weight: 700; background: linear-gradient(135deg, #2e7d32, #43a047); color: white; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 3px 10px rgba(46,125,50,0.3); transition: opacity .2s; }
+  .add-vehicle-btn:active { opacity: 0.8; }
+  .vehicle-list-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+  .vehicle-item { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .vehicle-plate-badge { background: var(--blue); color: white; padding: 4px 10px; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 14px; font-weight: 700; letter-spacing: 2px; }
+  .vehicle-info { flex: 1; }
+  .vehicle-owner { font-size: 13px; font-weight: 600; }
+  .vehicle-note { font-size: 11px; color: var(--subtext); margin-top: 2px; }
+  .vehicle-del-btn { background: #ffebee; color: var(--red); border: none; border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+
+  /* ═══════════════════════════════════════ 토스트 */
+  .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1a1a2e; color: white; padding: 12px 24px; border-radius: 24px; font-size: 14px; font-weight: 600; opacity: 0; transition: opacity .3s, transform .3s; z-index: 9999; max-width: 320px; text-align: center; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { background: var(--green); }
+  .toast.error { background: var(--red); }
+
+  /* ═══════════════════════════════════════ 애니메이션 */
+  @keyframes twinkle { from { opacity: .2; } to { opacity: 1; } }
+  @keyframes waveAnim { from { transform: scaleX(1); } to { transform: scaleX(1.05) translateY(-3px); } }
+  @keyframes tankerMove { 0% { left: -80px; } 60% { left: 140px; } 75% { left: 125px; } 100% { left: 130px; } }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.3); } }
+  @keyframes fadeInScene { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes flagShake { from { transform: rotate(-2deg); } to { transform: rotate(2deg); } }
+  @keyframes cry { from { transform: translateX(-50%) translateY(0); opacity: 1; } to { transform: translateX(-50%) translateY(8px); opacity: 0.3; } }
+  @keyframes drumRise { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  @keyframes arrowBounce { from { transform: translateY(0); } to { transform: translateY(-6px); } }
+  @keyframes pricePulse { from { transform: scale(1); } to { transform: scale(1.08); } }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ 로딩 화면 ═══════════════════ -->
+<div id="screen-loading" class="screen active">
+  <div class="loading-stars" id="stars"></div>
+
+  <div class="loading-title">더불어민주당<br>차량 2부제 단속 앱</div>
+  <div class="loading-subtitle">🚨 주차장 위반차량 자동 적발 시스템</div>
+
+  <div class="loading-stage">
+    <!-- 씬 1: 호르무즈 해협 유조선 -->
+    <div class="stage-scene visible" id="scene1">
+      <div class="hormuz-scene">
+        <div class="sea"></div>
+        <div class="wave"></div>
+        <div class="tanker" id="tankerShip">🛢️🚢</div>
+        <div class="strait-wall left"></div>
+        <div class="strait-wall right"></div>
+        <div class="strait-gap"></div>
+        <div class="block-sign">🚫</div>
+      </div>
+      <div class="scene-label">⚠️ 호르무즈 해협 봉쇄<br>유조선 통과 불가!</div>
+    </div>
+
+    <!-- 씬 2: 국기 -->
+    <div class="stage-scene" id="scene2">
+      <div class="flags-row">
+        <span title="이란">🇮🇷</span>
+        <div class="crying-flag">
+          <span title="대한민국">🇰🇷</span>
+          <div class="crying-overlay">😭</div>
+        </div>
+        <span title="미국">🇺🇸</span>
+      </div>
+      <div class="scene-label" style="margin-top:24px;">이란 🤝 미국 갈등 속<br>😭 울고 있는 대한민국</div>
+    </div>
+
+    <!-- 씬 3: 유가 상승 -->
+    <div class="stage-scene" id="scene3">
+      <div class="oil-scene">
+        <div class="drums-row">
+          <div class="drum">🛢️</div>
+          <div class="drum">🛢️</div>
+          <div class="drum">🛢️</div>
+          <div class="drum">🛢️</div>
+          <div class="drum">🛢️</div>
+        </div>
+        <div class="price-chart">
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+          <div class="price-arrow">🔺</div>
+          <div class="price-label">국제 유가 폭등!</div>
+          <div class="price-arrow">🔺</div>
+        </div>
+      </div>
+      <div class="scene-label" style="margin-top:16px;">치솟는 기름값 💸<br>에너지 위기 대응 필요!</div>
+    </div>
+  </div>
+
+  <div class="loading-bar-wrap">
+    <div class="loading-bar-bg">
+      <div class="loading-bar-fill" id="loadingBar"></div>
+    </div>
+    <div class="loading-percent" id="loadingPercent">로딩중... 0%</div>
+  </div>
+</div>
+
+<!-- ═══════════════════ 메인 화면 ═══════════════════ -->
+<div id="screen-main" class="screen">
+  <div class="main-banner">
+    <div class="main-banner-icon">🚨</div>
+    <div class="main-banner-title">더불어민주당<br>차량 2부제 단속 앱</div>
+    <div class="main-banner-sub">주차장 위반차량 스마트 관리 시스템</div>
+    <div class="main-date-badge" id="mainDateBadge">📅 오늘: --</div>
+  </div>
+
+  <div class="main-rule">
+    <div class="main-rule-text" id="mainRuleText">📋 운행 기준 로딩중...</div>
+  </div>
+
+  <div class="main-menu">
+    <div class="menu-card" onclick="goTo('screen-input')">
+      <div class="menu-card-icon orange">📝</div>
+      <div class="menu-card-body">
+        <div class="menu-card-title">위반차량 입력</div>
+        <div class="menu-card-desc">날짜 선택 후 층별 위반 차량번호 입력 및 저장</div>
+      </div>
+      <div class="menu-card-arrow">›</div>
+    </div>
+    <div class="menu-card" onclick="goTo('screen-stats')">
+      <div class="menu-card-icon blue">📊</div>
+      <div class="menu-card-body">
+        <div class="menu-card-title">위반차량 확인</div>
+        <div class="menu-card-desc">날짜별·차량별 위반 통계 및 상세 내역 조회</div>
+      </div>
+      <div class="menu-card-arrow">›</div>
+    </div>
+    <div class="menu-card" onclick="goTo('screen-db')">
+      <div class="menu-card-icon green">🚗</div>
+      <div class="menu-card-body">
+        <div class="menu-card-title">차량 DB 등록</div>
+        <div class="menu-card-desc">차량번호·소유자·비고 정보 등록 및 관리</div>
+      </div>
+      <div class="menu-card-arrow">›</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ 위반차량 입력 화면 ═══════════════════ -->
+<div id="screen-input" class="screen">
+  <div class="header">
+    <div class="header-back" onclick="goBack()">‹</div>
+    <div class="header-title">위반차량 입력</div>
+    <div class="header-icon">📝</div>
+  </div>
+  <div class="content">
+    <!-- 달력 -->
+    <div class="section-card">
+      <div class="section-title">날짜 선택</div>
+      <div class="cal-nav">
+        <button id="calPrev" onclick="calMove(-1)">◀</button>
+        <span id="calMonthLabel"></span>
+        <button id="calNext" onclick="calMove(1)">▶</button>
+      </div>
+      <div class="cal-wrap">
+        <div class="cal-header sun">일</div>
+        <div class="cal-header">월</div>
+        <div class="cal-header">화</div>
+        <div class="cal-header">수</div>
+        <div class="cal-header">목</div>
+        <div class="cal-header">금</div>
+        <div class="cal-header sat">토</div>
+        <div id="calDays"></div>
+      </div>
+      <div id="selectedDateInfo" style="margin-top:10px; text-align:center;"></div>
+    </div>
+
+    <!-- 층별 입력 -->
+    <div class="section-card" id="floorInputSection" style="display:none;">
+      <div class="section-title">층별 위반차량 번호 입력 <span style="font-size:11px;font-weight:400;color:var(--subtext);">(끝 4자리)</span></div>
+
+      <div class="floor-section">
+        <div class="floor-header">🅿️ 지상층</div>
+        <div class="floor-body" id="floor-ground"></div>
+        <button class="add-row-btn" onclick="addPlateRow('ground')">+ 차량 추가</button>
+      </div>
+
+      <div class="floor-section">
+        <div class="floor-header underground">🅿️ 지하 2층</div>
+        <div class="floor-body" id="floor-b2"></div>
+        <button class="add-row-btn" onclick="addPlateRow('b2')">+ 차량 추가</button>
+      </div>
+
+      <div class="floor-section">
+        <div class="floor-header underground">🅿️ 지하 3층</div>
+        <div class="floor-body" id="floor-b3"></div>
+        <button class="add-row-btn" onclick="addPlateRow('b3')">+ 차량 추가</button>
+      </div>
+
+      <div class="floor-section">
+        <div class="floor-header underground">🅿️ 지하 4층</div>
+        <div class="floor-body" id="floor-b4"></div>
+        <button class="add-row-btn" onclick="addPlateRow('b4')">+ 차량 추가</button>
+      </div>
+
+      <button class="save-btn" onclick="saveViolations()" id="saveBtn">💾 위반차량 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ 위반차량 확인 화면 ═══════════════════ -->
+<div id="screen-stats" class="screen">
+  <div class="header">
+    <div class="header-back" onclick="goBack()">‹</div>
+    <div class="header-title">위반차량 확인</div>
+    <div class="header-icon">📊</div>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('tab-date')">📅 날짜별</button>
+    <button class="tab-btn" onclick="switchTab('tab-rank')">🏆 위반 순위</button>
+  </div>
+  <div style="flex:1; overflow-y:auto;">
+    <div class="tab-content active" id="tab-date"></div>
+    <div class="tab-content" id="tab-rank"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════ 차량 DB 화면 ═══════════════════ -->
+<div id="screen-db" class="screen">
+  <div class="header">
+    <div class="header-back" onclick="goBack()">‹</div>
+    <div class="header-title">차량 DB 등록</div>
+    <div class="header-icon">🚗</div>
+  </div>
+  <div class="content">
+    <div class="db-form">
+      <div class="section-title">차량 정보 등록</div>
+      <div class="form-row">
+        <label class="form-label">차량번호 (끝 4자리) *</label>
+        <input type="text" class="form-input" id="dbPlate" placeholder="예: 1234" maxlength="4" pattern="[0-9]*" inputmode="numeric">
+      </div>
+      <div class="form-row-grid">
+        <div>
+          <label class="form-label">소유자 *</label>
+          <input type="text" class="form-input" id="dbOwner" placeholder="이름">
+        </div>
+        <div>
+          <label class="form-label">비고</label>
+          <input type="text" class="form-input" id="dbNote" placeholder="동/호수 등">
+        </div>
+      </div>
+      <button class="add-vehicle-btn" onclick="addVehicle()">✅ 차량 등록</button>
+    </div>
+
+    <div style="padding: 0 0 16px;">
+      <div class="vehicle-list-title">
+        <span>등록 차량 목록</span>
+        <span id="vehicleCount" style="font-size:12px;color:var(--subtext);">0대</span>
+      </div>
+      <div id="vehicleList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// 상태 관리
+// ══════════════════════════════════════════════
+const API = ''; // 같은 서버
+let currentScreen = 'screen-loading';
+let selectedDate = null; // 'YYYY-MM-DD'
+let calYear, calMonth;
+let rowCounters = { ground: 0, b2: 0, b3: 0, b4: 0 };
+
+const FLOORS = {
+  ground: '지상층',
+  b2: '지하 2층',
+  b3: '지하 3층',
+  b4: '지하 4층'
+};
+
+// ══════════════════════════════════════════════
+// 로딩 화면
+// ══════════════════════════════════════════════
+function createStars() {
+  const container = document.getElementById('stars');
+  for (let i = 0; i < 40; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() * 3 + 1;
+    s.style.cssText = `width:${size}px;height:${size}px;top:${Math.random()*100}%;left:${Math.random()*100}%;animation-delay:${Math.random()*2}s;animation-duration:${1.5+Math.random()}s;`;
+    container.appendChild(s);
+  }
+}
+
+function runLoading() {
+  createStars();
+  const bar = document.getElementById('loadingBar');
+  const pct = document.getElementById('loadingPercent');
+  const scenes = [document.getElementById('scene1'), document.getElementById('scene2'), document.getElementById('scene3')];
+  const totalMs = 4000;
+  const sceneMs = totalMs / 3;
+  let start = null;
+
+  function showScene(idx) {
+    scenes.forEach((s, i) => s.classList.toggle('visible', i === idx));
+  }
+
+  function step(ts) {
+    if (!start) start = ts;
+    const elapsed = Math.min(ts - start, totalMs);
+    const progress = elapsed / totalMs;
+    bar.style.width = (progress * 100) + '%';
+    pct.textContent = `로딩중... ${Math.floor(progress * 100)}%`;
+
+    const sceneIdx = Math.min(Math.floor(elapsed / sceneMs), 2);
+    showScene(sceneIdx);
+
+    if (elapsed < totalMs) {
+      requestAnimationFrame(step);
+    } else {
+      bar.style.width = '100%';
+      pct.textContent = '완료! 100%';
+      setTimeout(() => goTo('screen-main'), 400);
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+// ══════════════════════════════════════════════
+// 화면 전환
+// ══════════════════════════════════════════════
+function goTo(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  currentScreen = id;
+  if (id === 'screen-main') refreshMain();
+  if (id === 'screen-stats') loadStats();
+  if (id === 'screen-db') loadVehicles();
+  if (id === 'screen-input') initInputScreen();
+}
+
+function goBack() { goTo('screen-main'); }
+
+// ══════════════════════════════════════════════
+// 메인 화면
+// ══════════════════════════════════════════════
+function refreshMain() {
+  const today = new Date();
+  const d = today.getDate();
+  const isOdd = d % 2 === 1;
+  document.getElementById('mainDateBadge').textContent =
+    `📅 오늘: ${today.getFullYear()}년 ${today.getMonth()+1}월 ${d}일 (${['일','월','화','수','목','금','토'][today.getDay()]}요일)`;
+  document.getElementById('mainRuleText').innerHTML =
+    isOdd
+      ? `📋 오늘(${d}일, 홀수) 운행 가능: <b>끝자리 홀수(1,3,5,7,9)</b> 차량 — 짝수 차량 위반`
+      : `📋 오늘(${d}일, 짝수) 운행 가능: <b>끝자리 짝수(0,2,4,6,8)</b> 차량 — 홀수 차량 위반`;
+}
+
+// ══════════════════════════════════════════════
+// 달력
+// ══════════════════════════════════════════════
+function initInputScreen() {
+  const today = new Date();
+  calYear = today.getFullYear();
+  calMonth = today.getMonth();
+  renderCal();
+  resetFloors();
+  document.getElementById('floorInputSection').style.display = 'none';
+}
+
+function calMove(dir) {
+  calMonth += dir;
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  renderCal();
+}
+
+function renderCal() {
+  document.getElementById('calMonthLabel').textContent = `${calYear}년 ${calMonth+1}월`;
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += `<div class="cal-day empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isOdd = d % 2 === 1;
+    const isToday = dateStr === todayStr;
+    const isSelected = dateStr === selectedDate;
+    const classes = ['cal-day', isOdd ? 'odd-day' : 'even-day', isToday ? 'today' : '', isSelected ? 'selected' : ''].filter(Boolean).join(' ');
+    html += `<div class="${classes}" onclick="selectDate('${dateStr}', ${d})">${d}</div>`;
+  }
+  document.getElementById('calDays').innerHTML = html;
+}
+
+function selectDate(dateStr, day) {
+  selectedDate = dateStr;
+  renderCal();
+  const isOdd = day % 2 === 1;
+  const rule = isOdd
+    ? '홀수일 — 끝자리 짝수 차량이 위반입니다'
+    : '짝수일 — 끝자리 홀수 차량이 위반입니다';
+  document.getElementById('selectedDateInfo').innerHTML =
+    `<span style="font-weight:700;font-size:14px;">${dateStr}</span>&nbsp;&nbsp;` +
+    `<span class="rule-badge ${isOdd ? 'odd' : 'even'}">${rule}</span>`;
+  document.getElementById('floorInputSection').style.display = 'block';
+  resetFloors();
+}
+
+// ══════════════════════════════════════════════
+// 층별 입력
+// ══════════════════════════════════════════════
+function resetFloors() {
+  ['ground','b2','b3','b4'].forEach(f => {
+    document.getElementById('floor-' + f).innerHTML = '';
+    rowCounters[f] = 0;
+    addPlateRow(f);
+  });
+}
+
+function addPlateRow(floor) {
+  const container = document.getElementById('floor-' + floor);
+  const id = `${floor}_${rowCounters[floor]++}`;
+  const row = document.createElement('div');
+  row.className = 'plate-input-row';
+  row.id = 'row_' + id;
+  row.innerHTML = `
+    <div class="plate-num">${rowCounters[floor]}</div>
+    <input type="text" class="plate-input" id="inp_${id}"
+      placeholder="0000" maxlength="4" pattern="[0-9]*" inputmode="numeric"
+      oninput="validatePlate(this, '${floor}')" autocomplete="off">
+    <span class="validation-msg" id="msg_${id}"></span>
+    <button class="plate-delete" onclick="deleteRow('${id}')" title="삭제">✕</button>`;
+  container.appendChild(row);
+}
+
+function deleteRow(id) {
+  const row = document.getElementById('row_' + id);
+  if (row) row.remove();
+}
+
+function validatePlate(input, floor) {
+  input.value = input.value.replace(/\D/g, '').slice(0, 4);
+  const id = input.id.replace('inp_', '');
+  const msg = document.getElementById('msg_' + id);
+
+  if (!selectedDate || input.value.length < 4) {
+    input.classList.remove('valid','invalid');
+    msg.className = 'validation-msg';
+    return;
+  }
+
+  const day = parseInt(selectedDate.split('-')[2]);
+  const isOddDay = day % 2 === 1;
+  const lastDigit = parseInt(input.value.slice(-1));
+  const isOddPlate = lastDigit % 2 === 1;
+
+  // 위반: 홀수날 짝수차량 or 짝수날 홀수차량
+  const isViolation = (isOddDay && !isOddPlate) || (!isOddDay && isOddPlate);
+
+  if (isViolation) {
+    input.classList.remove('invalid'); input.classList.add('valid');
+    msg.className = 'validation-msg ok show'; msg.textContent = '✓ 위반';
+  } else {
+    input.classList.remove('valid'); input.classList.add('invalid');
+    msg.className = 'validation-msg err show'; msg.textContent = '✗ 운행가능';
+  }
+}
+
+function saveViolations() {
+  if (!selectedDate) { showToast('날짜를 먼저 선택하세요.', 'error'); return; }
+  const day = parseInt(selectedDate.split('-')[2]);
+  const isOddDay = day % 2 === 1;
+  const entries = [];
+
+  ['ground','b2','b3','b4'].forEach(floor => {
+    const inputs = document.getElementById('floor-' + floor).querySelectorAll('input');
+    inputs.forEach(inp => {
+      const val = inp.value.trim();
+      if (val.length === 4) {
+        const lastDigit = parseInt(val.slice(-1));
+        const isOddPlate = lastDigit % 2 === 1;
+        const isViolation = (isOddDay && !isOddPlate) || (!isOddDay && isOddPlate);
+        if (isViolation) {
+          entries.push({ date: selectedDate, floor: FLOORS[floor], plateNumber: val });
+        }
+      }
+    });
+  });
+
+  if (entries.length === 0) { showToast('저장할 위반차량이 없습니다.', 'error'); return; }
+
+  document.getElementById('saveBtn').disabled = true;
+  fetch('/api/violations/batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ entries })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      showToast(`✅ ${data.count}건 저장 완료!`, 'success');
+      resetFloors();
+      selectedDate = null;
+      document.getElementById('selectedDateInfo').innerHTML = '';
+      document.getElementById('floorInputSection').style.display = 'none';
+      renderCal();
+    } else {
+      showToast('저장 실패: ' + (data.message || ''), 'error');
+    }
+  })
+  .catch(() => showToast('서버 연결 오류', 'error'))
+  .finally(() => { document.getElementById('saveBtn').disabled = false; });
+}
+
+// ══════════════════════════════════════════════
+// 통계
+// ══════════════════════════════════════════════
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function loadStats() {
+  fetch('/api/stats')
+    .then(r => r.json())
+    .then(data => {
+      renderDateStats(data.byDate);
+      renderRankStats(data.byCount);
+    })
+    .catch(() => {
+      document.getElementById('tab-date').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>서버 연결 오류</p></div>';
+    });
+}
+
+function renderDateStats(byDate) {
+  const el = document.getElementById('tab-date');
+  const dates = Object.keys(byDate).sort().reverse();
+  if (dates.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>위반 내역이 없습니다.</p></div>'; return;
+  }
+  el.innerHTML = dates.map(date => {
+    const items = byDate[date];
+    const dayOfMonth = parseInt(date.split('-')[2]);
+    const dayNames = ['일','월','화','수','목','금','토'];
+    const dayObj = new Date(date);
+    const dayName = dayNames[dayObj.getDay()];
+    const isOdd = dayOfMonth % 2 === 1;
+    const rows = items.map(item => `
+      <div class="stat-row">
+        <div class="stat-plate">${item.plateNumber}</div>
+        <div class="stat-floor">${item.floor}</div>
+        <div class="stat-info">
+          <div class="stat-owner">👤 ${item.owner}</div>
+          <div class="stat-note">📌 ${item.note}</div>
+        </div>
+      </div>`).join('');
+    return `
+      <div class="stat-date-group">
+        <div class="stat-date-label">
+          📅 ${date} (${dayName}요일) &nbsp;
+          <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${isOdd?'rgba(0,61,165,0.12)':'rgba(198,40,40,0.1)'};color:${isOdd?'var(--blue)':'var(--red)'};">${isOdd?'홀수일':'짝수일'}</span>
+          <span style="margin-left:auto;font-size:12px;color:var(--subtext);">${items.length}건</span>
+        </div>
+        ${rows}
+      </div>`;
+  }).join('');
+}
+
+function renderRankStats(byCount) {
+  const el = document.getElementById('tab-rank');
+  if (byCount.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🏆</div><p>위반 내역이 없습니다.</p></div>'; return;
+  }
+  el.innerHTML = byCount.map((item, i) => {
+    const rank = i + 1;
+    const rankClass = rank <= 3 ? `rank-${rank}` : 'rank-n';
+    return `
+      <div class="stat-row">
+        <div class="rank-badge ${rankClass}">${rank}</div>
+        <div class="stat-plate">${item.plateNumber}</div>
+        <div class="stat-info">
+          <div class="stat-owner">👤 ${item.owner}</div>
+          <div class="stat-note">📌 ${item.note}</div>
+        </div>
+        <div class="count-badge">${item.count}회</div>
+      </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+// 차량 DB
+// ══════════════════════════════════════════════
+function loadVehicles() {
+  fetch('/api/vehicles')
+    .then(r => r.json())
+    .then(vehicles => renderVehicles(vehicles))
+    .catch(() => showToast('서버 연결 오류', 'error'));
+}
+
+function renderVehicles(vehicles) {
+  document.getElementById('vehicleCount').textContent = `${vehicles.length}대`;
+  const list = document.getElementById('vehicleList');
+  if (vehicles.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">🚗</div><p>등록된 차량이 없습니다.</p></div>'; return;
+  }
+  list.innerHTML = vehicles.map(v => `
+    <div class="vehicle-item">
+      <div class="vehicle-plate-badge">${v.plateNumber}</div>
+      <div class="vehicle-info">
+        <div class="vehicle-owner">👤 ${v.owner || '-'}</div>
+        <div class="vehicle-note">📌 ${v.note || '-'}</div>
+      </div>
+      <button class="vehicle-del-btn" onclick="deleteVehicle(${v.id})">삭제</button>
+    </div>`).join('');
+}
+
+function addVehicle() {
+  const plate = document.getElementById('dbPlate').value.trim().replace(/\D/g,'').slice(0,4);
+  const owner = document.getElementById('dbOwner').value.trim();
+  const note = document.getElementById('dbNote').value.trim();
+  if (plate.length < 1) { showToast('차량번호를 입력하세요.', 'error'); return; }
+  if (!owner) { showToast('소유자를 입력하세요.', 'error'); return; }
+  fetch('/api/vehicles', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plateNumber: plate, owner, note })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      showToast('✅ 차량 등록 완료!', 'success');
+      document.getElementById('dbPlate').value = '';
+      document.getElementById('dbOwner').value = '';
+      document.getElementById('dbNote').value = '';
+      loadVehicles();
+    } else {
+      showToast(data.message || '등록 실패', 'error');
+    }
+  })
+  .catch(() => showToast('서버 연결 오류', 'error'));
+}
+
+function deleteVehicle(id) {
+  if (!confirm('이 차량을 삭제하시겠습니까?')) return;
+  fetch('/api/vehicles/' + id, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(() => { showToast('삭제 완료', 'success'); loadVehicles(); })
+    .catch(() => showToast('서버 연결 오류', 'error'));
+}
+
+// ══════════════════════════════════════════════
+// 토스트
+// ══════════════════════════════════════════════
+let toastTimer = null;
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, 2500);
+}
+
+// ══════════════════════════════════════════════
+// 시작
+// ══════════════════════════════════════════════
+runLoading();
+</script>
+</body>
+</html>
